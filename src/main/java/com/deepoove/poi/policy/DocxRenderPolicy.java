@@ -26,6 +26,7 @@ import com.deepoove.poi.NiceXWPFDocument;
 import com.deepoove.poi.XWPFTemplate;
 import com.deepoove.poi.config.Configure;
 import com.deepoove.poi.data.DocxRenderData;
+import com.deepoove.poi.render.RenderContext;
 import com.deepoove.poi.template.run.RunTemplate;
 
 /**
@@ -36,32 +37,26 @@ import com.deepoove.poi.template.run.RunTemplate;
  * @author Sayi
  * @version 1.3.0
  */
-public class DocxRenderPolicy extends AbstractRenderPolicy {
+public class DocxRenderPolicy extends AbstractRenderPolicy<DocxRenderData> {
+
     @Override
-    protected boolean validate(Object data) {
-        return null != data;
+    protected void beforeRender(RenderContext context) {
+        clearPlaceholder(context, false);
     }
 
     @Override
-    public void doRender(RunTemplate runTemplate, Object data, XWPFTemplate template)
-            throws Exception {
+    public void doRender(RunTemplate runTemplate, DocxRenderData data, XWPFTemplate template) throws Exception {
         NiceXWPFDocument doc = template.getXWPFDocument();
         XWPFRun run = runTemplate.getRun();
-        // 优先清空标签
-        clearPlaceholder(run);
-
-        List<NiceXWPFDocument> docMerges = getMergedDocxs((DocxRenderData) data,
-                template.getConfig());
+        List<NiceXWPFDocument> docMerges = getMergedDocxs(data, template.getConfig());
         doc = doc.merge(docMerges, run);
-
         template.reload(doc);
     }
 
-    private List<NiceXWPFDocument> getMergedDocxs(DocxRenderData data, Configure configure)
-            throws IOException {
+    private List<NiceXWPFDocument> getMergedDocxs(DocxRenderData data, Configure configure) throws IOException {
         List<NiceXWPFDocument> docs = new ArrayList<NiceXWPFDocument>();
         byte[] docx = data.getDocx();
-        List<?> dataList = data.getDataList();
+        List<?> dataList = data.getRenderDatas();
         if (null == dataList || dataList.isEmpty()) {
             // 待合并的文档不是模板
             docs.add(new NiceXWPFDocument(new ByteArrayInputStream(docx)));

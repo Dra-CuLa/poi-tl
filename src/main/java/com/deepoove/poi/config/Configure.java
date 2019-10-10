@@ -15,7 +15,10 @@
  */
 package com.deepoove.poi.config;
 
+import java.text.MessageFormat;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -23,8 +26,10 @@ import com.deepoove.poi.policy.DocxRenderPolicy;
 import com.deepoove.poi.policy.MiniTableRenderPolicy;
 import com.deepoove.poi.policy.NumbericRenderPolicy;
 import com.deepoove.poi.policy.PictureRenderPolicy;
+import com.deepoove.poi.policy.ReferenceRenderPolicy;
 import com.deepoove.poi.policy.RenderPolicy;
 import com.deepoove.poi.policy.TextRenderPolicy;
+import com.deepoove.poi.util.RegexUtils;
 
 /**
  * 插件化配置
@@ -34,18 +39,42 @@ import com.deepoove.poi.policy.TextRenderPolicy;
  */
 public class Configure {
 
+    // defalut expression
+    private static final String DEFAULT_GRAMER_REGEX = "[\\w\\u4e00-\\u9fa5]+(\\.[\\w\\u4e00-\\u9fa5]+)*";
+
     // Highest priority
-    private Map<String, RenderPolicy> customPolicys = new HashMap<String, RenderPolicy>(8);
+    private Map<String, RenderPolicy> customPolicys = new HashMap<String, RenderPolicy>();
     // Low priority
     private Map<Character, RenderPolicy> defaultPolicys = new HashMap<Character, RenderPolicy>();
 
+    /**
+     * 引用渲染策略
+     */
+    private List<ReferenceRenderPolicy<?>> referencePolicies = new ArrayList<>();
+
+    /**
+     * 语法前缀
+     */
     private String gramerPrefix = "{{";
+    /**
+     * 语法后缀
+     */
     private String gramerSuffix = "}}";
 
     /**
-     * 支持中文、字母、数字、下划线的正则
+     * 默认支持中文、字母、数字、下划线的正则
      */
-    private String grammerReg = "[\\w\\u4e00-\\u9fa5]+(\\.[\\w\\u4e00-\\u9fa5]+)*";
+    private String grammerRegex = DEFAULT_GRAMER_REGEX;
+
+    /**
+     * 模板表达式模式，默认为POI_TL_MODE
+     */
+    private ELMode elMode = ELMode.POI_TL_STANDARD_MODE;
+
+    /**
+     * 渲染数据为null时，是保留还是清空模板标签
+     */
+    private boolean nullToBlank = true;
 
     private Configure() {
         plugin(GramerSymbol.TEXT, new TextRenderPolicy());
@@ -100,6 +129,15 @@ public class Configure {
     }
 
     /**
+     * 新增引用渲染策略
+     * 
+     * @param policy
+     */
+    public void referencePolicy(ReferenceRenderPolicy<?> policy) {
+        referencePolicies.add(policy);
+    }
+
+    /**
      * 获取标签策略
      * 
      * @param tagName
@@ -110,6 +148,10 @@ public class Configure {
     public RenderPolicy getPolicy(String tagName, Character sign) {
         RenderPolicy policy = getCustomPolicy(tagName);
         return null == policy ? getDefaultPolicy(sign) : policy;
+    }
+
+    public List<ReferenceRenderPolicy<?>> getReferencePolicies() {
+        return referencePolicies;
     }
 
     public Map<Character, RenderPolicy> getDefaultPolicys() {
@@ -140,11 +182,21 @@ public class Configure {
         return defaultPolicys.get(sign);
     }
 
-    public String getReg() {
-        return grammerReg;
+    public String getGrammerRegex() {
+        return grammerRegex;
+    }
+
+    public ELMode getElMode() {
+        return elMode;
+    }
+
+    public boolean isNullToBlank() {
+        return nullToBlank;
     }
 
     public static class ConfigureBuilder {
+        private static String regexForAllPattern = "((?!{0})(?!{1}).)*";
+        private boolean regexForAll;
         private Configure config = new Configure();
 
         public ConfigureBuilder() {}
@@ -155,8 +207,28 @@ public class Configure {
             return this;
         }
 
-        public ConfigureBuilder buildReg(String reg) {
-            config.grammerReg = reg;
+        /**
+         * 设置模板表达式模式
+         * 
+         * @return
+         */
+        public ConfigureBuilder setElMode(ELMode mode) {
+            config.elMode = mode;
+            return this;
+        }
+
+        public ConfigureBuilder buildGrammerRegex(String reg) {
+            config.grammerRegex = reg;
+            return this;
+        }
+
+        public ConfigureBuilder supportGrammerRegexForAll() {
+            this.regexForAll = true;
+            return this;
+        }
+
+        public ConfigureBuilder supportNullToBlank(boolean nullToBlank) {
+            config.nullToBlank = nullToBlank;
             return this;
         }
 
@@ -170,7 +242,20 @@ public class Configure {
             return this;
         }
 
+        public ConfigureBuilder referencePolicy(ReferenceRenderPolicy<?> policy) {
+            config.referencePolicy(policy);
+            return this;
+        }
+
         public Configure build() {
+            if (config.elMode == ELMode.SPEL_MODE) {
+                supportGrammerRegexForAll();
+            }
+            if (regexForAll) {
+                buildGrammerRegex(MessageFormat.format(regexForAllPattern,
+                        RegexUtils.escapeExprSpecialWord(config.gramerPrefix),
+                        RegexUtils.escapeExprSpecialWord(config.gramerSuffix)));
+            }
             return config;
         }
 

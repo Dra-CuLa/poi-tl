@@ -1,21 +1,29 @@
-package com.deepoove.poi.tl.el;
+package com.deepoove.poi.tl.render;
 
-import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 
 import org.junit.Before;
 import org.junit.Test;
 
 import com.deepoove.poi.XWPFTemplate;
+import com.deepoove.poi.config.Configure;
+import com.deepoove.poi.config.ELMode;
 import com.deepoove.poi.data.HyperLinkTextRenderData;
 import com.deepoove.poi.data.MiniTableRenderData;
 import com.deepoove.poi.data.PictureRenderData;
 import com.deepoove.poi.data.RowRenderData;
 import com.deepoove.poi.data.TextRenderData;
+import com.deepoove.poi.tl.el.Author;
+import com.deepoove.poi.tl.el.DataModel;
+import com.deepoove.poi.tl.el.Desc;
+import com.deepoove.poi.tl.el.Detail;
 
 /**
  * 点缀法标签
+ * 
  * @author Sayi
  */
 public class ELTemplateTest {
@@ -56,13 +64,49 @@ public class ELTemplateTest {
         detail.setDesc(desc);
         model.setDetail(detail);
 
+        // poi_tl_mode
         XWPFTemplate template = XWPFTemplate.compile("src/test/resources/dot.docx").render(model);
+        template.writeToFile("out_dot.docx");
 
-        FileOutputStream out = new FileOutputStream("out_dot.docx");
-        template.write(out);
-        out.flush();
-        out.close();
-        template.close();
+        // spel_mode 部分兼容以前的模式
+        Configure config = Configure.newBuilder().setElMode(ELMode.SPEL_MODE).build();
+        template = XWPFTemplate.compile("src/test/resources/dot.docx", config).render(model);
+        template.writeToFile("out_spel_dot.docx");
+    }
+
+    /**
+     * 支持中文变量
+     * @throws IOException 
+     */
+    @SuppressWarnings("serial")
+    @Test
+    public void testChinese() throws IOException {
+        Configure.ConfigureBuilder builder = Configure.newBuilder();
+        XWPFTemplate template = XWPFTemplate
+                .compile("src/test/resources/chinese.docx", builder.build())
+                .render(new HashMap<String, Object>() {
+                    {
+                        put("作者姓名", "Sayi");
+                        put("作者别名", "卅一");
+                        put("authoravatar",
+                                new PictureRenderData(60, 60, "src/test/resources/sayi.png"));
+                        put("detaildiff", new MiniTableRenderData(header, tableDatas,
+                                MiniTableRenderData.WIDTH_A4_FULL));
+                        put("详情网址", new HyperLinkTextRenderData("http://www.deepoove.com",
+                                "http://www.deepoove.com"));
+                        put("详情", new HashMap<String, Object>() {
+                            {
+                                put("描述", new HashMap<String, String>() {
+                                    {
+                                        put("日期", "2019-05-24");
+                                    }
+                                });
+                            }
+                        });
+                    }
+                });
+
+        template.writeToFile("out_chinese.docx");
     }
 
 }

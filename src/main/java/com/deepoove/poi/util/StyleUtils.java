@@ -24,6 +24,7 @@ import org.apache.poi.xwpf.usermodel.XWPFRun;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTColor;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTFonts;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTHighlight;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTHpsMeasure;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTJc;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTOnOff;
@@ -35,6 +36,8 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTRPr;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTShd;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTString;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblPr;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STHighlightColor;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STHighlightColor.Enum;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STOnOff;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STShd;
 
@@ -64,6 +67,7 @@ public final class StyleUtils {
         Boolean italic = style.isItalic();
         Boolean strike = style.isStrike();
         Boolean underLine = style.isUnderLine();
+        Enum highlightColor = style.getHighlightColor();
         if (StringUtils.isNotBlank(color)) run.setColor(color);
         if (0 != fontSize) run.setFontSize(fontSize);
         if (StringUtils.isNotBlank(fontFamily)) {
@@ -75,10 +79,23 @@ public final class StyleUtils {
             fonts.setCs(fontFamily);
             fonts.setEastAsia(fontFamily);
         }
+        if (null != highlightColor) {
+            CTRPr pr = run.getCTR().isSetRPr() ? run.getCTR().getRPr() : run.getCTR().addNewRPr();
+            CTHighlight highlight = pr.isSetHighlight() ? pr.getHighlight() : pr.addNewHighlight();
+            STHighlightColor hColor = highlight.xgetVal();
+            if (hColor == null) {
+                hColor = STHighlightColor.Factory.newInstance();
+            }
+            STHighlightColor.Enum val = STHighlightColor.Enum.forString(highlightColor.toString());
+            if (val != null) {
+                hColor.setStringValue(val.toString());
+                highlight.xsetVal(hColor);
+            }
+        }
         if (null != bold) run.setBold(bold);
         if (null != italic) run.setItalic(italic);
         if (null != strike) run.setStrikeThrough(strike);
-        if (Boolean.TRUE.equals(underLine)){
+        if (Boolean.TRUE.equals(underLine)) {
             run.setUnderline(UnderlinePatterns.SINGLE);
         }
     }
@@ -86,16 +103,19 @@ public final class StyleUtils {
     /**
      * 重复样式
      * 
-     * @param destRun 新建的run
-     * @param srcRun 原始run
+     * @param destRun
+     *            新建的run
+     * @param srcRun
+     *            原始run
      */
     public static void styleRun(XWPFRun destRun, XWPFRun srcRun) {
         if (null == destRun || null == srcRun) return;
         CTR ctr = srcRun.getCTR();
-        if (ctr.isSetRPr() && ctr.getRPr().isSetRStyle()){
+        if (ctr.isSetRPr() && ctr.getRPr().isSetRStyle()) {
             String val = ctr.getRPr().getRStyle().getVal();
             if (StringUtils.isNotBlank(val)) {
-                CTRPr pr = destRun.getCTR().isSetRPr() ? destRun.getCTR().getRPr() : destRun.getCTR().addNewRPr();
+                CTRPr pr = destRun.getCTR().isSetRPr() ? destRun.getCTR().getRPr()
+                        : destRun.getCTR().addNewRPr();
                 CTString rStyle = pr.isSetRStyle() ? pr.getRStyle() : pr.addNewRStyle();
                 rStyle.setVal(val);
             }
@@ -103,11 +123,13 @@ public final class StyleUtils {
         if (Boolean.TRUE.equals(srcRun.isBold())) destRun.setBold(srcRun.isBold());
         destRun.setColor(srcRun.getColor());
         // destRun.setCharacterSpacing(srcRun.getCharacterSpacing());
-        if (StringUtils.isNotBlank(srcRun.getFontFamily())) destRun.setFontFamily(srcRun.getFontFamily());
+        if (StringUtils.isNotBlank(srcRun.getFontFamily()))
+            destRun.setFontFamily(srcRun.getFontFamily());
         int fontSize = srcRun.getFontSize();
         if (-1 != fontSize) destRun.setFontSize(fontSize);
         if (Boolean.TRUE.equals(srcRun.isItalic())) destRun.setItalic(srcRun.isItalic());
-        if (Boolean.TRUE.equals(srcRun.isStrikeThrough())) destRun.setStrikeThrough(srcRun.isStrikeThrough());
+        if (Boolean.TRUE.equals(srcRun.isStrikeThrough()))
+            destRun.setStrikeThrough(srcRun.isStrikeThrough());
         destRun.setUnderline(srcRun.getUnderline());
     }
 
@@ -161,33 +183,32 @@ public final class StyleUtils {
         }
     }
 
-	public static void styleTable(XWPFTable table, TableStyle style) {
-		if (null == table || null == style)
-			return;
-		CTTblPr tblPr = table.getCTTbl().getTblPr();
-		if (null == tblPr) {
-			tblPr = table.getCTTbl().addNewTblPr();
-		}
-		if (null != style.getAlign()) {
-			CTJc jc = tblPr.isSetJc() ? tblPr.getJc() : tblPr.addNewJc();
-			jc.setVal(style.getAlign());
-		}
-		if (StringUtils.isNotBlank(style.getBackgroundColor())) {
-			CTShd ctshd = tblPr.isSetShd() ? tblPr.getShd() : tblPr.addNewShd();
-			ctshd.setColor("auto");
-			ctshd.setVal(STShd.CLEAR);
-			ctshd.setFill(style.getBackgroundColor());
-		}
-	}
+    public static void styleTable(XWPFTable table, TableStyle style) {
+        if (null == table || null == style) return;
+        CTTblPr tblPr = table.getCTTbl().getTblPr();
+        if (null == tblPr) {
+            tblPr = table.getCTTbl().addNewTblPr();
+        }
+        if (null != style.getAlign()) {
+            CTJc jc = tblPr.isSetJc() ? tblPr.getJc() : tblPr.addNewJc();
+            jc.setVal(style.getAlign());
+        }
+        if (StringUtils.isNotBlank(style.getBackgroundColor())) {
+            CTShd ctshd = tblPr.isSetShd() ? tblPr.getShd() : tblPr.addNewShd();
+            ctshd.setColor("auto");
+            ctshd.setVal(STShd.CLEAR);
+            ctshd.setFill(style.getBackgroundColor());
+        }
+    }
 
-	public static void styleTableParagraph(XWPFParagraph par, TableStyle style) {
-		if (null != par && null != style && null != style.getAlign()) {
-			CTP ctp = par.getCTP();
-			CTPPr CTPpr = ctp.isSetPPr() ? ctp.getPPr() : ctp.addNewPPr();
-			CTJc jc = CTPpr.isSetJc() ? CTPpr.getJc() : CTPpr.addNewJc();
-			jc.setVal(style.getAlign());
-		}
+    public static void styleTableParagraph(XWPFParagraph par, TableStyle style) {
+        if (null != par && null != style && null != style.getAlign()) {
+            CTP ctp = par.getCTP();
+            CTPPr CTPpr = ctp.isSetPPr() ? ctp.getPPr() : ctp.addNewPPr();
+            CTJc jc = CTPpr.isSetJc() ? CTPpr.getJc() : CTPpr.addNewJc();
+            jc.setVal(style.getAlign());
+        }
 
-	}
+    }
 
 }

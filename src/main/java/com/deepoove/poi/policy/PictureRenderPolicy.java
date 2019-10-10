@@ -25,65 +25,78 @@ import org.apache.poi.xwpf.usermodel.XWPFRun;
 import com.deepoove.poi.XWPFTemplate;
 import com.deepoove.poi.data.PictureRenderData;
 import com.deepoove.poi.exception.RenderException;
+import com.deepoove.poi.render.RenderContext;
 import com.deepoove.poi.template.run.RunTemplate;
 
-public class PictureRenderPolicy extends AbstractRenderPolicy {
-	
-	static final int EMU = 9525;
+public class PictureRenderPolicy extends AbstractRenderPolicy<PictureRenderData> {
 
     @Override
-    protected boolean validate(Object data) {
-        if (null == data) return false;
-
-        if (!(data instanceof PictureRenderData)) {
-            throw new RenderException("Error datamodel: correct type is PictureRenderData, but is "
-                    + data.getClass());
-        }
-
-        return (null != ((PictureRenderData) data).getData()
-                || null != ((PictureRenderData) data).getPath());
+    protected boolean validate(PictureRenderData data) {
+        return (null != data.getData() || null != data.getPath());
     }
 
     @Override
-    public void doRender(RunTemplate runTemplate, Object model, XWPFTemplate template)
+    public void doRender(RunTemplate runTemplate, PictureRenderData picture, XWPFTemplate template)
             throws Exception {
-    	XWPFRun run = runTemplate.getRun();
-
-        PictureRenderData picture = (PictureRenderData) model;
-        int suggestFileType = suggestFileType(picture.getPath());
-
-        InputStream ins = null == picture.getData() ? new FileInputStream(picture.getPath()) : new ByteArrayInputStream(picture.getData());
-        
-        run.addPicture(ins, suggestFileType, "Generated", picture.getWidth()*EMU,
-                picture.getHeight()*EMU);
-        
-        clearPlaceholder(run);
+        XWPFRun run = runTemplate.getRun();
+        Helper.renderPicture(run, picture);
     }
+
     @Override
-    protected void doRenderException(RunTemplate runTemplate, Object data, Exception e) {
-        runTemplate.getRun().setText(((PictureRenderData) data).getAltMeta(), 0);
+    protected void afterRender(RenderContext context) {
+        clearPlaceholder(context, false);
     }
 
-    public static int suggestFileType(String imgFile) {
-        int format = 0;
+    @Override
+    protected void doRenderException(RunTemplate runTemplate, PictureRenderData data, Exception e) {
+        logger.info("Render picture " + runTemplate + " error: {}", e.getMessage());
+        runTemplate.getRun().setText(data.getAltMeta(), 0);
+    }
 
-        if (imgFile.endsWith(".emf")) format = XWPFDocument.PICTURE_TYPE_EMF;
-        else if (imgFile.endsWith(".wmf")) format = XWPFDocument.PICTURE_TYPE_WMF;
-        else if (imgFile.endsWith(".pict")) format = XWPFDocument.PICTURE_TYPE_PICT;
-        else if (imgFile.endsWith(".jpeg") || imgFile.endsWith(".jpg"))
-            format = XWPFDocument.PICTURE_TYPE_JPEG;
-        else if (imgFile.endsWith(".png")) format = XWPFDocument.PICTURE_TYPE_PNG;
-        else if (imgFile.endsWith(".dib")) format = XWPFDocument.PICTURE_TYPE_DIB;
-        else if (imgFile.endsWith(".gif")) format = XWPFDocument.PICTURE_TYPE_GIF;
-        else if (imgFile.endsWith(".tiff")) format = XWPFDocument.PICTURE_TYPE_TIFF;
-        else if (imgFile.endsWith(".eps")) format = XWPFDocument.PICTURE_TYPE_EPS;
-        else if (imgFile.endsWith(".bmp")) format = XWPFDocument.PICTURE_TYPE_BMP;
-        else if (imgFile.endsWith(".wpg")) format = XWPFDocument.PICTURE_TYPE_WPG;
-        else {
-            throw new RenderException("Unsupported picture: " + imgFile
-                    + ". Expected emf|wmf|pict|jpeg|png|dib|gif|tiff|eps|bmp|wpg");
+    public static class Helper {
+        public static final int EMU = 9525;
+
+        public static void renderPicture(XWPFRun run, PictureRenderData picture) throws Exception {
+            int suggestFileType = suggestFileType(picture.getPath());
+
+            InputStream ins = null == picture.getData() ? new FileInputStream(picture.getPath())
+                    : new ByteArrayInputStream(picture.getData());
+
+            run.addPicture(ins, suggestFileType, "Generated", picture.getWidth() * EMU,
+                    picture.getHeight() * EMU);
         }
-        return format;
-    }
 
+        public static int suggestFileType(String imgFile) {
+            int format = 0;
+
+            if (imgFile.endsWith(".emf"))
+                format = XWPFDocument.PICTURE_TYPE_EMF;
+            else if (imgFile.endsWith(".wmf"))
+                format = XWPFDocument.PICTURE_TYPE_WMF;
+            else if (imgFile.endsWith(".pict"))
+                format = XWPFDocument.PICTURE_TYPE_PICT;
+            else if (imgFile.endsWith(".jpeg") || imgFile.endsWith(".jpg"))
+                format = XWPFDocument.PICTURE_TYPE_JPEG;
+            else if (imgFile.endsWith(".png"))
+                format = XWPFDocument.PICTURE_TYPE_PNG;
+            else if (imgFile.endsWith(".dib"))
+                format = XWPFDocument.PICTURE_TYPE_DIB;
+            else if (imgFile.endsWith(".gif"))
+                format = XWPFDocument.PICTURE_TYPE_GIF;
+            else if (imgFile.endsWith(".tiff"))
+                format = XWPFDocument.PICTURE_TYPE_TIFF;
+            else if (imgFile.endsWith(".eps"))
+                format = XWPFDocument.PICTURE_TYPE_EPS;
+            else if (imgFile.endsWith(".bmp"))
+                format = XWPFDocument.PICTURE_TYPE_BMP;
+            else if (imgFile.endsWith(".wpg"))
+                format = XWPFDocument.PICTURE_TYPE_WPG;
+            else {
+                throw new RenderException(
+                        "Unsupported picture: " + imgFile + ". Expected emf|wmf|pict|jpeg|png|dib|gif|tiff|eps|bmp|wpg");
+            }
+            return format;
+        }
+
+    }
 }

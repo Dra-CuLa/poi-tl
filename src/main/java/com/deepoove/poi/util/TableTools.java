@@ -1,3 +1,18 @@
+/*
+ * Copyright 2014-2019 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.deepoove.poi.util;
 
 import java.math.BigInteger;
@@ -14,6 +29,8 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTcPr;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTVMerge;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STMerge;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STTblWidth;
+
+import com.deepoove.poi.data.style.TableStyle;
 
 /**
  * XWPFTable 增强工具类 <br/>
@@ -92,9 +109,7 @@ public final class TableTools {
      * @param widths
      *            每列的宽度，单位CM
      */
-    @SuppressWarnings("unused")
-    // TODO 
-    private static void widthTable(XWPFTable table, float[] colWidths) {
+    public static void widthTable(XWPFTable table, float[] colWidths) {
         float widthCM = 0;
         for (float w : colWidths) {
             widthCM += w;
@@ -164,6 +179,10 @@ public final class TableTools {
         tblBorders.getRight().setSz(borderSize);
         tblBorders.getInsideH().setSz(borderSize);
         tblBorders.getInsideV().setSz(borderSize);
+    }
+    
+    public static void styleTable(XWPFTable table, TableStyle style) {
+        StyleUtils.styleTable(table, style);
     }
 
     private static CTTblPr getTblPr(XWPFTable table) {

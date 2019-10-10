@@ -28,11 +28,12 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTc;
 
 import com.deepoove.poi.NiceXWPFDocument;
 import com.deepoove.poi.XWPFTemplate;
+import com.deepoove.poi.data.CellRenderData;
 import com.deepoove.poi.data.MiniTableRenderData;
 import com.deepoove.poi.data.RowRenderData;
 import com.deepoove.poi.data.TextRenderData;
 import com.deepoove.poi.data.style.TableStyle;
-import com.deepoove.poi.exception.RenderException;
+import com.deepoove.poi.render.RenderContext;
 import com.deepoove.poi.template.run.RunTemplate;
 import com.deepoove.poi.util.ObjectUtils;
 import com.deepoove.poi.util.StyleUtils;
@@ -44,17 +45,11 @@ import com.deepoove.poi.util.TableTools;
  * @author Sayi 卅一
  * @since v1.3.0
  */
-public class MiniTableRenderPolicy extends AbstractRenderPolicy {
+public class MiniTableRenderPolicy extends AbstractRenderPolicy<MiniTableRenderData> {
 
     @Override
-    protected boolean validate(Object data) {
-        if (null == data) return false;
-        if (!(data instanceof MiniTableRenderData)) {
-            throw new RenderException("Error datamodel: correct type is MiniTableRenderData, but is "
-                    + data.getClass());
-        }
-        if (!((MiniTableRenderData) data).isSetBody()
-                && !((MiniTableRenderData) data).isSetHeader()) {
+    protected boolean validate(MiniTableRenderData data) {
+        if (!(data).isSetBody() && !(data).isSetHeader()) {
             logger.debug("Empty MiniTableRenderData datamodel: {}", data);
             return false;
         }
@@ -62,19 +57,21 @@ public class MiniTableRenderPolicy extends AbstractRenderPolicy {
     }
 
     @Override
-    public void doRender(RunTemplate runTemplate, Object data, XWPFTemplate template)
+    public void doRender(RunTemplate runTemplate, MiniTableRenderData data, XWPFTemplate template)
             throws Exception {
         NiceXWPFDocument doc = template.getXWPFDocument();
         XWPFRun run = runTemplate.getRun();
 
-        if (!((MiniTableRenderData) data).isSetBody()) {
-            renderNoDataTable(doc, run, (MiniTableRenderData) data);
+        if (!data.isSetBody()) {
+            renderNoDataTable(doc, run, data);
         } else {
-            renderTable(doc, run, (MiniTableRenderData) data);
+            renderTable(doc, run, data);
         }
+    }
 
-        // 成功后，才会清除标签，发生异常则保留标签，可以重写doRenderException方法在发生异常后也会清除标签
-        clearPlaceholder(run);
+    @Override
+    protected void afterRender(RenderContext context) {
+        clearPlaceholder(context, true);
     }
 
     private void renderTable(NiceXWPFDocument doc, XWPFRun run, MiniTableRenderData tableData) {
@@ -84,7 +81,7 @@ public class MiniTableRenderPolicy extends AbstractRenderPolicy {
             col = getMaxColumFromData(tableData.getDatas());
         } else {
             row++;
-            col = tableData.getHeaders().size();
+            col = tableData.getHeader().size();
         }
 
         // 2.创建表格
@@ -93,23 +90,23 @@ public class MiniTableRenderPolicy extends AbstractRenderPolicy {
 
         // 3.渲染数据
         int startRow = 0;
-        if (tableData.isSetHeader()) renderRow(table, startRow++, tableData.getHeaders());
+        if (tableData.isSetHeader()) Helper.renderRow(table, startRow++, tableData.getHeader());
         for (RowRenderData data : tableData.getDatas()) {
-            renderRow(table, startRow++, data);
+            Helper.renderRow(table, startRow++, data);
         }
 
     }
 
     private void renderNoDataTable(NiceXWPFDocument doc, XWPFRun run,
             MiniTableRenderData tableData) {
-        int row = 2, col = tableData.getHeaders().size();
+        int row = 2, col = tableData.getHeader().size();
 
         XWPFTable table = doc.insertNewTable(run, row, col);
         initBasicTable(table, col, tableData.getWidth(), tableData.getStyle());
 
-        renderRow(table, 0, tableData.getHeaders());
+        Helper.renderRow(table, 0, tableData.getHeader());
 
-        TableTools.mergeCellsHorizonal(table, 1, 0, tableData.getHeaders().size() - 1);
+        TableTools.mergeCellsHorizonal(table, 1, 0, tableData.getHeader().size() - 1);
         XWPFTableCell cell = table.getRow(1).getCell(0);
         cell.setText(tableData.getNoDatadesc());
 
@@ -121,62 +118,6 @@ public class MiniTableRenderPolicy extends AbstractRenderPolicy {
         StyleUtils.styleTable(table, style);
     }
 
-    /**
-     * 填充表格一行的数据
-     * 
-     * @param table
-     * @param row
-     *            第几行
-     * @param rowData
-     *            行数据：确保行数据的大小不超过表格该行的单元格数量
-     */
-    public static void renderRow(XWPFTable table, int row, RowRenderData rowData) {
-        if (null == rowData || rowData.size() <= 0) return;
-        XWPFTableRow tableRow = table.getRow(row);
-        ObjectUtils.requireNonNull(tableRow, "Row " + row + " do not exist in the table");
-
-        TableStyle style = rowData.getStyle();
-        List<TextRenderData> cellList = rowData.getRowData();
-        XWPFTableCell cell = null;
-
-        for (int i = 0; i < cellList.size(); i++) {
-            cell = tableRow.getCell(i);
-            if (null == cell) {
-                logger.warn("Extra cell data at row {}, but no extra cell: col {}", row, cell);
-                break;
-            }
-
-            // 处理单元格样式
-            if (null != style && null != style.getBackgroundColor()) {
-                cell.setColor(style.getBackgroundColor());
-            }
-
-            TextRenderData cellData = cellList.get(i);
-            String cellText = cellData.getText();
-            if (StringUtils.isBlank(cellText)) continue;
-
-            String[] fragment = cellText.split(TextRenderPolicy.REGEX_LINE_CHARACTOR, -1);
-            if (null == fragment || fragment.length <= 0) continue;
-
-            // 处理单元格数据
-            XWPFParagraph par;
-            XWPFRun run;
-            for (int j = 0; j < fragment.length; j++) {
-                if (0 == j) {
-                    CTTc ctTc = cell.getCTTc();
-                    CTP ctP = (ctTc.sizeOfPArray() == 0) ? ctTc.addNewP() : ctTc.getPArray(0);
-                    par = new XWPFParagraph(ctP, cell);
-                } else {
-                    par = cell.addParagraph();
-                }
-                StyleUtils.styleTableParagraph(par, style);
-                run = par.createRun();
-                StyleUtils.styleRun(run, cellData.getStyle());
-                run.setText(fragment[j]);
-            }
-        }
-    }
-
     private int getMaxColumFromData(List<RowRenderData> datas) {
         int maxColom = 0;
         for (RowRenderData obj : datas) {
@@ -184,6 +125,77 @@ public class MiniTableRenderPolicy extends AbstractRenderPolicy {
             if (obj.size() > maxColom) maxColom = obj.size();
         }
         return maxColom;
+    }
+
+    public static class Helper {
+
+        /**
+         * 填充表格一行的数据
+         * 
+         * @param table
+         * @param row
+         *            第几行
+         * @param rowData
+         *            行数据：确保行数据的大小不超过表格该行的单元格数量
+         */
+        public static void renderRow(XWPFTable table, int row, RowRenderData rowData) {
+            if (null == rowData || rowData.size() <= 0) return;
+            XWPFTableRow tableRow = table.getRow(row);
+            ObjectUtils.requireNonNull(tableRow, "Row " + row + " do not exist in the table");
+
+            TableStyle rowStyle = rowData.getRowStyle();
+            List<CellRenderData> cellList = rowData.getCellDatas();
+            XWPFTableCell cell = null;
+
+            for (int i = 0; i < cellList.size(); i++) {
+                cell = tableRow.getCell(i);
+                if (null == cell) {
+                    logger.warn("Extra cell data at row {}, but no extra cell: col {}", row, cell);
+                    break;
+                }
+                renderCell(cell, cellList.get(i), rowStyle);
+            }
+        }
+
+        public static void renderCell(XWPFTableCell cell, CellRenderData cellData,
+                TableStyle rowStyle) {
+            TableStyle cellStyle = (null == cellData.getCellStyle() ? rowStyle
+                    : cellData.getCellStyle());
+
+            // 处理单元格样式
+            if (null != cellStyle && null != cellStyle.getBackgroundColor()) {
+                cell.setColor(cellStyle.getBackgroundColor());
+            }
+
+            TextRenderData renderData = cellData.getRenderData();
+            String cellText = renderData.getText();
+            if (StringUtils.isBlank(cellText)) return;
+
+            // 处理单元格数据
+            CTTc ctTc = cell.getCTTc();
+            CTP ctP = (ctTc.sizeOfPArray() == 0) ? ctTc.addNewP() : ctTc.getPArray(0);
+            XWPFParagraph par = new XWPFParagraph(ctP, cell);
+            StyleUtils.styleTableParagraph(par, cellStyle);
+
+            String text = renderData.getText();
+            String[] fragment = text.split(TextRenderPolicy.REGEX_LINE_CHARACTOR, -1);
+
+            if (fragment.length <= 1) {
+                TextRenderPolicy.Helper.renderTextRun(par.createRun(), renderData);
+            } else {
+                // 单元格内换行的用不同段落来特殊处理
+                XWPFRun run;
+                for (int j = 0; j < fragment.length; j++) {
+                    if (0 != j) {
+                        par = cell.addParagraph();
+                        StyleUtils.styleTableParagraph(par, cellStyle);
+                    }
+                    run = par.createRun();
+                    StyleUtils.styleRun(run, renderData.getStyle());
+                    run.setText(fragment[j]);
+                }
+            }
+        }
     }
 
 }
