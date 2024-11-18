@@ -3,7 +3,9 @@
 .project
 .settings/
 *.iml
+**/**/.idea/
 bin/
+.idea/*
 
 # Package Files #
 *.jar
@@ -17,5 +19,13 @@ out*.docx
 out_*
 merge_all
 
+/doc/*
+
 #private
+**/**/mk.md
 complex.docx
+~$*.docx
+poi-tl-cli/target/
+poi-tl-jsonmodel-support/target/
+poi-tl/.DS_Store
+.DS_Store
